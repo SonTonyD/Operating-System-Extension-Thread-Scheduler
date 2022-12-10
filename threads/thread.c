@@ -71,6 +71,7 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
+void thread_awake (int64_t current_tick);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -123,7 +124,7 @@ thread_start (void)
 /* Called by the timer interrupt handler at each timer tick.
    Thus, this function runs in an external interrupt context. */
 void
-thread_tick (void) 
+thread_tick (int64_t tick) 
 {
   struct thread *t = thread_current ();
 
@@ -137,9 +138,28 @@ thread_tick (void)
   else
     kernel_ticks++;
 
+  thread_awake (tick);
+
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
+}
+
+void
+thread_awake (int64_t current_tick)
+{
+  struct list_elem *e;
+  ASSERT (intr_get_level () == INTR_OFF);
+
+  for (e = list_begin (&wait_list); e != list_end (&wait_list); e = list_next(e))
+  {
+    struct thread *t = list_entry (e, struct thread, waitelem);
+    if (t->sleep_endtick <= current_tick) {
+      t->sleep_endtick = 0;
+      list_remove (&t->waitelem);
+      thread_unblock (t);
+    }
+  }
 }
 
 /* Prints thread statistics. */
