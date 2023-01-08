@@ -386,10 +386,12 @@ thread_set_priority (int new_priority)
 {
   struct thread* next;
   thread_current ()->priority = new_priority;
-  next = list_entry(list_begin(&ready_list), struct thread, elem);
-  if (next->priority > new_priority) 
-  {
-    thread_yield();
+
+  if (!list_empty (&ready_list)) {
+    next = list_entry(list_begin(&ready_list), struct thread, elem);
+    if (next != NULL && next->priority > new_priority) {
+      thread_yield();
+    }
   }
 }
 
@@ -517,6 +519,7 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->original_priority = priority;
   t->magic = THREAD_MAGIC;
   t->sleep_endtick = 0;
 
