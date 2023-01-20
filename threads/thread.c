@@ -72,8 +72,10 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 void thread_awake (int64_t current_tick);
+void thread_priority_donate(struct thread *, int priority);
 
 static bool comparator_greater_thread_priority (const struct list_elem *, const struct list_elem *, void *aux);
+
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -384,15 +386,33 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  struct thread* next;
-  thread_current ()->priority = new_priority;
-
+  struct thread *t_current = thread_current();
+  if (t_current->priority == t_current->original_priority) {
+    t_current->priority = new_priority;
+    t_current->original_priority = new_priority;
+  }
+  else {
+    t_current->original_priority = new_priority;
+  }
   if (!list_empty (&ready_list)) {
-    next = list_entry(list_begin(&ready_list), struct thread, elem);
+    struct thread *next = list_entry(list_begin(&ready_list), struct thread, elem);
     if (next != NULL && next->priority > new_priority) {
       thread_yield();
     }
   }
+}
+
+void
+thread_priority_donate(struct thread *target, int new_priority)
+{
+  target->priority = new_priority;
+  if (target == thread_current() && !list_empty (&ready_list)) {
+    struct thread *next = list_entry(list_begin(&ready_list), struct thread, elem);
+    if (next != NULL && next->priority > new_priority) {
+      thread_yield();
+    }
+  }
+
 }
 
 /* Returns the current thread's priority. */
@@ -520,6 +540,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->original_priority = priority;
+  t->waiting_lock = NULL;
+  list_init (&t->locks);
   t->magic = THREAD_MAGIC;
   t->sleep_endtick = 0;
 
